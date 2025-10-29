@@ -8,8 +8,8 @@ OS: Ubuntu 20.04
 ROS: Noetic (Python3)
 
 1) apt-get 갱신
-sudo apt-get update
-sudo apt-get install -y pkg-config
+    sudo apt-get update
+    sudo apt-get install -y pkg-config
 
 
 2) 의존성 팩키지 자동 설정
