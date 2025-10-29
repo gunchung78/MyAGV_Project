@@ -1,0 +1,31 @@
+global_costmap:
+  global_frame: map
+  robot_base_frame: base_footprint
+
+  # 주기(글로벌은 느려도 됨)
+  update_frequency: 2.0
+  publish_frequency: 1.0
+  transform_tolerance: 0.5
+
+  # 정적 맵 기반 글로벌 코스트맵
+  static_map: true
+  rolling_window: false
+  # 해상도는 map_server의 맵(.yaml/.pgm)에서 그대로 상속됨
+
+  plugins:
+    - {name: static_layer,    type: "costmap_2d::StaticLayer"}
+    - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
+
+  # --- StaticLayer (맵 서버) ---
+  static_layer:
+    map_topic: map
+    subscribe_to_updates: true
+    track_unknown_space: true
+    lethal_cost_threshold: 100
+    unknown_cost_value: 255
+
+  # --- InflationLayer (글로벌 여유 공간) ---
+  inflation_layer:
+    inflation_radius: 0.30        # 로봇 외곽 + 여유(0.25~0.35 권장)
+    cost_scaling_factor: 3.0       # 비용 급감 속도(2.5~4.0 사이 튜닝)
+
