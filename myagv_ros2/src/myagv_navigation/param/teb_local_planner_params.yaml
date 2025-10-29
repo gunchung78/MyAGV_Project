@@ -1,0 +1,87 @@
+TebLocalPlannerROS:
+
+  odom_topic: odom
+  map_frame: map
+
+  # Trajectory
+  teb_autosize: true
+  dt_ref: 0.3
+  dt_hysteresis: 0.05
+  global_plan_overwrite_orientation: true
+  max_global_plan_lookahead_dist: 2.0
+  feasibility_check_no_poses: 1
+
+  # Robot
+  max_vel_x: 0.16
+  max_vel_y: 0.12
+  max_vel_theta: 0.70
+  max_vel_x_backwards: 0.15
+
+  min_vel_x: 0.02
+  min_turning_vel: 0.20
+  acc_lim_x: 0.50
+  acc_lim_y: 0.40
+  acc_lim_theta: 0.90
+  min_turning_radius: 0.0
+
+  footprint_model:
+    type: "polygon"
+    vertices: [[0.16, 0.12], [0.16, -0.12], [-0.16, -0.12], [-0.16, 0.12]]
+
+  # Goal Tolerance
+  xy_goal_tolerance: 0.10
+  yaw_goal_tolerance: 0.25
+  free_goal_vel: false
+
+  # Obstacles
+  min_obstacle_dist: 0.20
+  inflation_dist: 0.30
+  include_costmap_obstacles: true
+  costmap_obstacles_behind_robot_dist: 1.0
+  obstacle_poses_affected: 7
+  costmap_converter_plugin: ""
+  costmap_converter_spin_thread: true
+  costmap_converter_rate: 5
+
+  # Optimization
+  no_inner_iterations: 5
+  no_outer_iterations: 4
+  optimization_activate: true
+  optimization_verbose: false
+  penalty_epsilon: 0.1
+  weight_max_vel_x: 1.0
+  weight_max_vel_y: 1.0
+  weight_max_vel_theta: 1.0
+  weight_acc_lim_x: 1.0
+  weight_acc_lim_y: 1.0
+  weight_acc_lim_theta: 1.0
+  weight_kinematics_nh: 1.0
+  weight_kinematics_forward_drive: 10.0
+  weight_kinematics_turning_radius: 1000.0
+  weight_optimaltime: 0.6
+  weight_obstacle: 50.0
+  weight_dynamic_obstacle: 10.0
+  selection_alternative_time_cost: false
+
+  # Homotopy
+  enable_homotopy_class_planning: false
+  enable_multithreading: true
+  simple_exploration: false
+  max_number_classes: 4
+  roadmap_graph_no_samples: 15
+  roadmap_graph_area_width: 5
+  h_signature_prescaler: 0.5
+  h_signature_threshold: 0.1
+  obstacle_keypoint_offset: 0.1
+  obstacle_heading_threshold: 0.45
+  visualize_hc_graph: false
+
+  # Recovery
+  shrink_horizon_backup: true
+  shrink_horizon_min_duration: 3.0
+  oscillation_recovery: false
+  oscillation_v_eps: 0.1
+  oscillation_omega_eps: 0.1
+  oscillation_recovery_min_duration: 5.0
+  oscillation_filter_duration: 5.0
+

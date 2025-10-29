@@ -1,0 +1,76 @@
+<launch>
+  <arg name="scan_topic" default="scan" />
+
+  <node pkg="gmapping" type="slam_gmapping" name="gmapping" output="screen" clear_params="true">
+    <!-- TF 프레임: 실제 트리와 일치하게 -->
+    <param name="base_frame" value="base_footprint"/>
+    <param name="odom_frame" value="odom"/>
+
+    <!-- 맵 갱신 주기 -->
+    <param name="map_update_interval" value="0.8"/>
+
+    <!-- 라이다 범위(센서 스펙에 맞춰 조정) -->
+    <param name="maxRange"  value="10.0"/>
+    <param name="maxUrange" value="8.0"/>
+
+    <!-- 스캔매칭/최적화 -->
+    <param name="sigma" value="0.05"/>
+    <param name="kernelSize" value="1"/>
+    <param name="lstep" value="0.05"/>
+    <param name="astep" value="0.05"/>
+    <param name="iterations" value="5"/>
+    <param name="lsigma" value="0.075"/>
+    <param name="ogain" value="3.0"/>
+
+    <!-- 샘플 스킵 (환경 따라 0~3) -->
+    <param name="lskip" value="1"/>
+
+    <!-- 모션 노이즈 모델(조금 보수적으로) -->
+    <param name="srr" value="0.1"/>
+    <param name="srt" value="0.2"/>
+    <param name="str" value="0.1"/>
+    <param name="stt" value="0.2"/>
+
+    <!-- 업데이트 조건 (중복벽 억제 핵심) -->
+    <param name="linearUpdate"  value="0.2"/>
+    <param name="angularUpdate" value="0.17"/>   <!-- ≈9.7° -->
+    <param name="temporalUpdate" value="1.0"/>
+
+    <param name="resampleThreshold" value="0.5"/>
+    <param name="particles" value="40"/>  <!-- Pi4 부하 완화: 40~60 권장 -->
+
+    <!-- 초기 맵 범위/해상도 -->
+    <param name="xmin" value="-20.0"/>
+    <param name="ymin" value="-20.0"/>
+    <param name="xmax" value="20.0"/>
+    <param name="ymax" value="20.0"/>
+    <param name="delta" value="0.05"/>
+
+    <!-- 스캐너 샘플러 -->
+    <param name="llsamplerange" value="0.01"/>
+    <param name="llsamplestep"  value="0.01"/>
+    <param name="lasamplerange" value="0.005"/>
+    <param name="lasamplestep"  value="0.005"/>
+
+    <remap from="scan" to="$(arg scan_topic)"/>
+  </node>
+
+  <!-- 선택: 근거리 반사 필터 -->
+  <!--
+  <node pkg="laser_filters" type="scan_to_scan_filter_chain" name="scan_filter">
+    <rosparam>
+      scan_filter_chain:
+      - name: range
+        type: LaserScanRangeFilter
+        params:
+          use_message_range_limits: false
+          lower_threshold: 0.28
+          upper_threshold: 10.0
+          lower_replacement_value: .inf
+          upper_replacement_value: .inf
+    </rosparam>
+    <remap from="scan" to="$(arg scan_topic)"/>
+  </node>
+  -->
+</launch>
+
