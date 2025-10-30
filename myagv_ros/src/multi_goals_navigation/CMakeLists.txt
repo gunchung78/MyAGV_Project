@@ -211,6 +211,12 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 
+catkin_install_python(PROGRAMS
+  src/vision/vision_sub_node.py
+  src/vision/vision_result.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
 add_executable(multi_goals_txt src/multi_goals_txt.cpp)
 target_link_libraries(multi_goals_txt ${catkin_LIBRARIES})
 add_executable(vision_result_pub src/vision_result_pub.cpp)
