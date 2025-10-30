@@ -31,9 +31,9 @@
 
   <node pkg="amcl" type="amcl" name="amcl" output="screen">
     <rosparam file="$(find myagv_navigation)/param/amcl.yaml" command="load" />
-    <param name="initial_pose_x"            value="-0.609260082244873"/>
-    <param name="initial_pose_y"            value="-3.174661874771118"/>
-    <param name="initial_pose_a"            value="-1.8903356791"/>
+  	<param name="initial_pose_x" value="-0.6257898807525635"/>
+  	<param name="initial_pose_y" value="-3.0990774631500244"/>
+  	<param name="initial_pose_a" value="-1.867"/>
   </node>      
 
 
