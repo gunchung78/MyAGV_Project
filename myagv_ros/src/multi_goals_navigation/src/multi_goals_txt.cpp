@@ -340,8 +340,8 @@ private:
   bool   start_vision_in_terminal_{true};
   bool   start_vision_once_{true};
   bool   vision_started_{false};
-  std::string vision_cmd_{"rosrun multi_goals_navigation vision_orchestrator_runner"};
-  std::string ros_setup_{"~/catkin_ws/devel/setup.bash"};
+  std::string vision_cmd_{"rosrun multi_goals_navigation vision_orchestrator_runner.py"};
+  std::string ros_setup_{"~/MyAGV_Project/myagv_ros/devel/setup.bash"};
 
   // [NEW] /vision_result 반드시 수신 여부
   bool must_receive_decision_{true};
