@@ -1,41 +1,18 @@
 local_costmap:
-  global_frame: odom
-  robot_base_frame: base_footprint
+   global_frame: odom
+   robot_base_frame: base_footprint
+   update_frequency: 5.0
+   publish_frequency: 2.0
+#   static_map: false
+   rolling_window: true
+   width: 3.0
+   height: 3.0
+   resolution: 0.02
+   transform_tolerance: 1.2
+   inflation_radius: 0.02
+   #map_type: costmap
 
-  # 주기: 로컬은 빠르게
-  update_frequency: 10.0
-  publish_frequency: 5.0
-  transform_tolerance: 0.5
-
-  # 로컬 창
-  rolling_window: true
-  width: 3.0
-  height: 3.0
-  resolution: 0.05   # gmapping delta와 동일하게 맞추기
-
-  # 플러그인 (로컬엔 StaticLayer 제외)
-  plugins:
-    - {name: obstacle_layer,  type: "costmap_2d::ObstacleLayer"}
-    - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
-
-  # ---- ObstacleLayer 설정 ----
-  obstacle_layer:
-    track_unknown_space: false
-    combination_method: 1          # max
-    observation_sources: laser_scan
-    laser_scan:
-      sensor_frame: laser_frame
-      data_type: LaserScan
-      topic: scan
-      expected_update_rate: 0.0
-      marking: true
-      clearing: true
-      obstacle_range: 3.0          # 보수적으로 2.5~3.5 권장 (X2 라이다)
-      raytrace_range: 4.0
-      inf_is_valid: true
-
-  # ---- InflationLayer 설정 ----
-  inflation_layer:
-    inflation_radius: 0.30         # 로봇 외곽 + 여유 (0.25~0.35 권장)
-    cost_scaling_factor: 3.0       # 급격히 떨어지는 비용(2.5~4.0 사이 튜닝)
-
+   plugins:
+   - {name: static_layer,        type: "costmap_2d::StaticLayer"}
+   - {name: obstacle_layer,      type: "costmap_2d::ObstacleLayer"}
+   - {name: inflation_layer,     type: "costmap_2d::InflationLayer"}
