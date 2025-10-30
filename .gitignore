@@ -1,3 +1,5 @@
+myagv_ros/build/
+myagv_ros/devel/
 myagv_ros/build/.built_by
 myagv_ros/build/CATKIN_IGNORE
 myagv_ros/build/catkin_make.cache
