@@ -13,6 +13,12 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <cstdlib>          // std::system, std::getenv
+#include <boost/bind.hpp>   // boost::bind
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 struct GoalRow { double x, y, yaw_deg; };
 
@@ -40,6 +46,15 @@ public:
     pnh_.param<int>("default_decision", default_decision, 0);
     default_decision_ = (default_decision != 0) ? 1 : 0;
 
+    // [NEW] 체크포인트에서 비전 오케스트레이터 실행 옵션
+    pnh_.param<bool>("start_vision_in_terminal", start_vision_in_terminal_, true);
+    pnh_.param<bool>("start_vision_once", start_vision_once_, true);
+    pnh_.param<std::string>("vision_cmd", vision_cmd_, std::string("rosrun multi_goals_navigation vision_orchestrator_runner"));
+    pnh_.param<std::string>("ros_setup", ros_setup_, std::string("~/catkin_ws/devel/setup.bash"));
+
+    // [NEW] vision_result를 반드시 수신해야 다음 goal로 진행할지
+    pnh_.param<bool>("must_receive_decision", must_receive_decision_, true);
+
     if (file_path_.empty()) { ROS_FATAL("~file 파라미터 없음"); throw std::runtime_error("file param empty"); }
     if (!loadFile(file_path_)) { ROS_FATAL("목표 파일 읽기 실패: %s", file_path_.c_str()); throw std::runtime_error("file load fail"); }
 
@@ -53,7 +68,7 @@ public:
       throw std::runtime_error("move_base server timeout");
     }
 
-    // vision 결과 구독(라치값도 수신 가능)
+    // vision 결과 구독
     decision_sub_ = nh_.subscribe<std_msgs::Int32>(decision_topic_, 1, &MultiGoalActionCli::decisionCb, this);
 
     // 다음 goal 전송용 oneshot 타이머 (처음엔 autostart=false)
@@ -110,6 +125,58 @@ private:
     next_goal_timer_.start();
   }
 
+  // [NEW] 터미널 실행 유틸 (GUI 실패 시 headless 폴백)
+  bool launchInTerminal(const std::string& user_cmd) {
+    const std::string core = "source " + ros_setup_ + " >/dev/null 2>&1; " + user_cmd;
+
+    const char* disp = std::getenv("DISPLAY");
+    const bool has_display = (disp && std::string(disp).size() > 0);
+
+    const std::vector<std::string> terms = {
+      "gnome-terminal --",  // gnome-terminal은 -e 폐지
+      "konsole -e",
+      "xfce4-terminal -e",
+      "lxterminal -e",
+      "xterm -e"
+    };
+
+    if (has_display) {
+      const std::string gn_cmd = "bash -ic '" + core + "; exec bash'";
+      for (const auto& t : terms) {
+        std::string cmd;
+        if (t.find("gnome-terminal") == 0) {
+          cmd = t + " " + gn_cmd + " &";
+        } else {
+          cmd = t + " \"" + gn_cmd + "\" &";
+        }
+        ROS_INFO("터미널 시도: %s", cmd.c_str());
+        int ret = std::system(cmd.c_str());
+        if (ret == 0) {
+          ROS_INFO("터미널 실행 성공");
+          return true;
+        } else {
+          ROS_WARN("터미널 실행 실패(ret=%d). 다음 후보 시도.", ret);
+        }
+      }
+      ROS_ERROR("모든 터미널 시도 실패 → headless로 폴백");
+    } else {
+      ROS_WARN("DISPLAY 없음 → headless로 실행");
+    }
+
+    // headless 폴백: nohup + 로그 저장
+    const std::string headless =
+        "nohup bash -lc '" + core + "' >/tmp/vision_orchestrator.log 2>&1 & disown";
+    ROS_INFO("headless 실행: %s", headless.c_str());
+    int ret = std::system(headless.c_str());
+    if (ret == 0) {
+      ROS_INFO("headless 실행 성공. 로그: /tmp/vision_orchestrator.log");
+      return true;
+    } else {
+      ROS_ERROR("headless 실행도 실패(ret=%d)", ret);
+      return false;
+    }
+  }
+
   // ---------- goal 전송 ----------
   void sendCurrent() {
     if (rows_.empty()) { ROS_ERROR("목표 없음. 종료."); ros::shutdown(); return; }
@@ -164,7 +231,7 @@ private:
     (void)result;
     ROS_INFO("목표 %zu 결과: %s", idx_+1, state.toString().c_str());
 
-    // 성공/실패/LOST 모두 "도착 처리"로 간주 (정책에 맞게 조정 가능)
+    // 성공/실패/LOST 모두 "도착 처리"로 간주
     if (state == actionlib::SimpleClientGoalState::SUCCEEDED ||
         state == actionlib::SimpleClientGoalState::ABORTED   ||
         state == actionlib::SimpleClientGoalState::PREEMPTED ||
@@ -174,27 +241,41 @@ private:
       // 도착 후 dwell
       if (dwell_sec_ > 0.0) ros::Duration(dwell_sec_).sleep();
 
-      // 체크포인트 처리: vision_result 대기
+      // 체크포인트 처리: vision_orchestrator_runner 실행 + /vision_result 대기
       if (isCheckpointIdx(idx_)) {
-        ROS_WARN("체크포인트 %d 도달. %s 대기 (timeout=%.1fs, default=%d)",
+        if (start_vision_in_terminal_ && (!start_vision_once_ || !vision_started_)) {
+          ROS_WARN("체크포인트에서 vision orchestrator 실행: %s", vision_cmd_.c_str());
+          if (launchInTerminal(vision_cmd_)) {
+            vision_started_ = true;
+          } else {
+            ROS_ERROR("vision orchestrator 실행 실패(그래도 /vision_result 대기는 진행)");
+          }
+        }
+
+        ROS_WARN("체크포인트 %d 도달. %s 대기 (timeout=%.1fs, default=%d, must=%s)",
                  decision_checkpoint_idx_+1, decision_topic_.c_str(),
-                 decision_timeout_sec_, default_decision_);
+                 decision_timeout_sec_, default_decision_,
+                 must_receive_decision_ ? "true" : "false");
 
         waiting_decision_ = true;
         decision_ready_   = false;
 
-        // AsyncSpinner가 콜백 처리하므로 spinOnce() 금지. 타임아웃만 폴링.
+        const bool infinite_wait = must_receive_decision_ || (decision_timeout_sec_ <= 0.0);
         ros::Time start = ros::Time::now();
         while (ros::ok() && !decision_ready_) {
-          if ((ros::Time::now() - start).toSec() >= decision_timeout_sec_) {
-            last_decision_  = default_decision_;
-            decision_ready_ = true;
-            ROS_WARN("vision_result 타임아웃 → default=%d 사용", last_decision_);
-            break;
+          if (!infinite_wait) {
+            if ((ros::Time::now() - start).toSec() >= decision_timeout_sec_) {
+              last_decision_  = default_decision_;
+              decision_ready_ = true;
+              ROS_WARN("vision_result 타임아웃 → default=%d 사용", last_decision_);
+              break;
+            }
           }
           ros::Duration(0.01).sleep();
         }
+        if (!ros::ok()) return;
 
+        // 결정값에 따른 점프
         int next = (last_decision_ == 0) ? left_idx_ : right_idx_;
         if (next < 0 || next >= static_cast<int>(rows_.size())) {
           ROS_ERROR("분기 인덱스(%d) 유효하지 않음 → 다음 순번으로 진행", next);
@@ -205,18 +286,17 @@ private:
         }
         waiting_decision_ = false;
 
-        // 다음 goal은 타이머로 지연 전송 (DONE 직후 직접 호출 금지)
         scheduleNext(0.05);
         return;
       }
 
       // 일반 케이스: 다음 순번
       ++idx_;
-      scheduleNext(0.05); // DONE 콜백에서 직접 sendCurrent() 호출 금지
+      scheduleNext(0.05);
       return;
     }
 
-    // 그 밖의 상태면 조금 뒤 재시도(방어적)
+    // 그 밖의 상태면 조금 뒤 재시도
     scheduleNext(0.2);
   }
 
@@ -252,9 +332,19 @@ private:
   int decision_checkpoint_idx_{-1};
   int left_idx_{-1};
   int right_idx_{-1};
-  std::string decision_topic_{"/vision_result"};
+  std::string decision_topic_{"/yolo_result"};
   double decision_timeout_sec_{10.0};
   int default_decision_{0}; // 0=left, 1=right
+
+  // [NEW] 비전 오케스트레이터 실행 설정
+  bool   start_vision_in_terminal_{true};
+  bool   start_vision_once_{true};
+  bool   vision_started_{false};
+  std::string vision_cmd_{"rosrun multi_goals_navigation vision_orchestrator_runner.py"};
+  std::string ros_setup_{"~/MyAGV_Project/myagv_ros/devel/setup.bash"};
+
+  // [NEW] /vision_result 반드시 수신 여부
+  bool must_receive_decision_{true};
 
   // 상태
   std::vector<GoalRow> rows_;
@@ -272,7 +362,6 @@ int main(int argc, char** argv) {
   try {
     ros::NodeHandle nh;
     ros::NodeHandle pnh("~");
-    // 콜백/타이머 동시 처리
     ros::AsyncSpinner spinner(2);
     spinner.start();
     MultiGoalActionCli app(nh, pnh);

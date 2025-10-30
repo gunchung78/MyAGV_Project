@@ -46,17 +46,23 @@ public:
     pnh_.param<int>("default_decision", default_decision, 0);
     default_decision_ = (default_decision != 0) ? 1 : 0;
 
-    // [NEW] 체크포인트에서 비전 오케스트레이터 실행 옵션
+    // 비전 오케스트레이터 실행 옵션
     pnh_.param<bool>("start_vision_in_terminal", start_vision_in_terminal_, true);
     pnh_.param<bool>("start_vision_once", start_vision_once_, true);
-    pnh_.param<std::string>("vision_cmd", vision_cmd_, std::string("rosrun multi_goals_navigation vision_orchestrator_runner"));
+    pnh_.param<std::string>("vision_cmd", vision_cmd_, std::string("rosrun multi_goals_navigation vision_orchestrator_runner.py"));
     pnh_.param<std::string>("ros_setup", ros_setup_, std::string("~/catkin_ws/devel/setup.bash"));
 
-    // [NEW] vision_result를 반드시 수신해야 다음 goal로 진행할지
+    // /vision_result 반드시 수신 여부
     pnh_.param<bool>("must_receive_decision", must_receive_decision_, true);
 
-    if (file_path_.empty()) { ROS_FATAL("~file 파라미터 없음"); throw std::runtime_error("file param empty"); }
-    if (!loadFile(file_path_)) { ROS_FATAL("목표 파일 읽기 실패: %s", file_path_.c_str()); throw std::runtime_error("file load fail"); }
+    if (file_path_.empty()) {
+      ROS_FATAL("~file 파라미터 없음");
+      throw std::runtime_error("file param empty");
+    }
+    if (!loadFile(file_path_)) {
+      ROS_FATAL("목표 파일 읽기 실패: %s", file_path_.c_str());
+      throw std::runtime_error("file load fail");
+    }
 
     ROS_INFO("목표 %zu개 로드 (frame_id=%s, cycle=%s, dwell=%.2fs)",
              rows_.size(), frame_id_.c_str(), cycle_ ? "true" : "false", dwell_sec_);
@@ -125,7 +131,7 @@ private:
     next_goal_timer_.start();
   }
 
-  // [NEW] 터미널 실행 유틸 (GUI 실패 시 headless 폴백)
+  // 터미널 실행 유틸 (GUI 실패 시 headless 폴백)
   bool launchInTerminal(const std::string& user_cmd) {
     const std::string core = "source " + ros_setup_ + " >/dev/null 2>&1; " + user_cmd;
 
@@ -133,7 +139,7 @@ private:
     const bool has_display = (disp && std::string(disp).size() > 0);
 
     const std::vector<std::string> terms = {
-      "gnome-terminal --",  // gnome-terminal은 -e 폐지
+      "gnome-terminal --",
       "konsole -e",
       "xfce4-terminal -e",
       "lxterminal -e",
@@ -174,6 +180,16 @@ private:
     } else {
       ROS_ERROR("headless 실행도 실패(ret=%d)", ret);
       return false;
+    }
+  }
+
+  // ---------- 인덱스 전진 (왼쪽일 때 right_idx 한 번만 스킵) ----------
+  void advanceIdx() {
+    ++idx_;
+    if (skip_once_idx_ >= 0 && static_cast<int>(idx_) == skip_once_idx_) {
+      ROS_INFO("Left-branch rule: skipping index %d", skip_once_idx_);
+      ++idx_;
+      skip_once_idx_ = -1; // 한 번만 스킵
     }
   }
 
@@ -241,7 +257,7 @@ private:
       // 도착 후 dwell
       if (dwell_sec_ > 0.0) ros::Duration(dwell_sec_).sleep();
 
-      // 체크포인트 처리: vision_orchestrator_runner 실행 + /vision_result 대기
+      // 체크포인트 처리
       if (isCheckpointIdx(idx_)) {
         if (start_vision_in_terminal_ && (!start_vision_once_ || !vision_started_)) {
           ROS_WARN("체크포인트에서 vision orchestrator 실행: %s", vision_cmd_.c_str());
@@ -279,10 +295,21 @@ private:
         int next = (last_decision_ == 0) ? left_idx_ : right_idx_;
         if (next < 0 || next >= static_cast<int>(rows_.size())) {
           ROS_ERROR("분기 인덱스(%d) 유효하지 않음 → 다음 순번으로 진행", next);
-          ++idx_;
+          // 일반 진행
+          advanceIdx();
         } else {
           ROS_INFO("vision_result=%d → idx=%d 로 점프", last_decision_, next);
           idx_ = static_cast<size_t>(next);
+
+          // 왼쪽(0) 선택 시, 앞으로 진행하며 만날 수 있는 right_idx 한 번만 스킵
+          if (last_decision_ == 0) { // left
+            if (right_idx_ >= 0 && right_idx_ < static_cast<int>(rows_.size())) {
+              if (right_idx_ >= static_cast<int>(idx_)) {
+                skip_once_idx_ = right_idx_;
+                ROS_INFO("Left-branch: will skip index %d once.", skip_once_idx_);
+              }
+            }
+          }
         }
         waiting_decision_ = false;
 
@@ -291,7 +318,7 @@ private:
       }
 
       // 일반 케이스: 다음 순번
-      ++idx_;
+      advanceIdx();
       scheduleNext(0.05);
       return;
     }
@@ -332,18 +359,18 @@ private:
   int decision_checkpoint_idx_{-1};
   int left_idx_{-1};
   int right_idx_{-1};
-  std::string decision_topic_{"/vision_result"};
+  std::string decision_topic_{"/yolo_result"};
   double decision_timeout_sec_{10.0};
   int default_decision_{0}; // 0=left, 1=right
 
-  // [NEW] 비전 오케스트레이터 실행 설정
+  // 비전 오케스트레이터 실행 설정
   bool   start_vision_in_terminal_{true};
   bool   start_vision_once_{true};
   bool   vision_started_{false};
   std::string vision_cmd_{"rosrun multi_goals_navigation vision_orchestrator_runner.py"};
   std::string ros_setup_{"~/MyAGV_Project/myagv_ros/devel/setup.bash"};
 
-  // [NEW] /vision_result 반드시 수신 여부
+  // /vision_result 반드시 수신 여부
   bool must_receive_decision_{true};
 
   // 상태
@@ -355,6 +382,9 @@ private:
   bool waiting_decision_{false};
   bool decision_ready_{false};
   int  last_decision_{0};
+
+  // 왼쪽 브랜치 선택 시 한 번만 스킵할 인덱스 (예: right_idx)
+  int  skip_once_idx_{-1};
 };
 
 int main(int argc, char** argv) {

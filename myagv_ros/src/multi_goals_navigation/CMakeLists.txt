@@ -212,9 +212,9 @@ include_directories(
 # catkin_add_nosetests(test)
 
 catkin_install_python(PROGRAMS
-  # src/vision/vision_sub_node.py
-  # src/vision/vision_result.py
-  # src/vision/vision_orchestrator.py
+  src/vision/vision_sub_node.py
+  src/vision/vision_result.py
+  src/vision/vision_orchestrator.py
   src/vision/vision_orchestrator_runner.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
