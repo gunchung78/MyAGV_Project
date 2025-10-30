@@ -1,0 +1,8 @@
+prefix=/home/geon/MyAGV_Project/myagv_ros/install
+
+Name: multi_goals_navigation
+Description: Description of multi_goals_navigation
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

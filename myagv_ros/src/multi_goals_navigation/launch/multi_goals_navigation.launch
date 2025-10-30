@@ -1,0 +1,17 @@
+<launch>
+  <!-- 위의 내비 런치를 include 해서 같은 인자 재사용 -->
+  <include file="$(find multi_goals_navigation)/launch/multi_goals_navigation.launch">
+    <arg name="file" value="$(find multi_goals_txt)/config/goals.txt"/>
+    <arg name="decision_checkpoint_idx" value="2"/>
+    <arg name="left_idx" value="3"/>
+    <arg name="right_idx" value="4"/>
+    <arg name="dwell_sec" value="0.2"/>
+  </include>
+
+  <!-- 테스트 퍼블리셔: 1(오른쪽) 한 번만 발행하고 종료 -->
+  <node pkg="multi_goals_navigation" type="vision_result_pub" name="vision_result_pub" output="screen">
+    <param name="value"    value="1"/>     <!-- 0 or 1 -->
+    <param name="oneshot"  value="true"/>  <!-- true면 1회 발행 -->
+    <param name="topic"    value="/vision_result"/>
+  </node>
+</launch>

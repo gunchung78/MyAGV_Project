@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /home/geon/MyAGV_Project/myagv_ros/devel/setup.sh
