@@ -29,9 +29,14 @@
 
     catkin_make
     
-    source devel/setup.bash 
+    source devel/setup.bash
 
-4) 최종 실행
+4) 추가 적용
+
+pip3 install ultralytics
+
+
+5) 최종 실행
 
     python3 myagv_operation.py
 
