@@ -35,7 +35,7 @@
 
 pip3 install ultralytics
 
-
+sudo apt-get install -y sshpass
 5) 최종 실행
 
     python3 myagv_operation.py
