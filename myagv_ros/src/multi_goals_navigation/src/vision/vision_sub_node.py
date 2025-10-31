@@ -10,12 +10,18 @@ from std_msgs.msg import String, Int32
 from ultralytics import YOLO
 import torch
 
-# ===== Hardcoded config =====
-# Model path resolved relative to this file:
+# YOLOv8 50 epoch 학습 모델 Path
+# MODEL_PATH = os.path.join(
+#     os.path.dirname(os.path.abspath(__file__)),
+#     "train_e50_lr0", "weights", "best_e50_lr0.pt"
+# )
+
+# YOLOv8 500 epoch 학습 모델 Path
 MODEL_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    "train_e50_lr0", "weights", "best_e50_lr0.pt"
+    "train_e500_lr0", "weights", "best_e500.pt"
 )
+
 CLASSNAMES = ["left", "right"]
 CONF_TH    = 0.5
 IOU_TH     = 0.45
