@@ -1,188 +1,102 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 """
-myAGV navigation runner (fire-and-forget) + multi-goals (after 5s)
+원격(myAGV)에서 아래 두 launch를 실행/정지:
+  1) roslaunch myagv_navigation navigation_active.launch
+  2) (5초 뒤) roslaunch multi_goals_navigation multi_goals_navigation.launch
 
-- Default / --start :
-    1) roslaunch myagv_navigation navigation_active.launch
-    2) 5 seconds later -> roslaunch multi_goals_navigation multi_goals_navigation.launch
-- --stop :
-    stop both processes (navigation + multi_goals)
-- PID files:
-    /tmp/myagv_navigation.pid
-    /tmp/myagv_multi_goals.pid
-- New terminal spawn supported: gnome-terminal / konsole / xfce4-terminal / lxterminal / xterm
+로컬 PC는 단지 ssh로 명령만 보냄. GUI 터미널 없이 headless로 동작.
+원격 /tmp에 PID 파일을 남깁니다:
+  /tmp/myagv_navigation.pid
+  /tmp/myagv_multi_goals.pid
 """
 
 import argparse
-import os
-import signal
 import subprocess
 import sys
-import time
-from pathlib import Path
-from shutil import which
+
+# === 환경 설정 ===
+AGV_USER = "er"              # 원격 myAGV 사용자
+AGV_HOST = "172.30.1.94"     # 원격 myAGV IP/호스트
+ROS_SETUP = "/opt/ros/noetic/setup.bash"
+WS_SETUP  = "/home/er/MyAGV_Project/myagv_ros/devel/setup.bash"  # 워크스페이스
+
+PID_NAV   = "/tmp/myagv_navigation.pid"
+PID_MULTI = "/tmp/myagv_multi_goals.pid"
 
 LAUNCH_NAV   = "roslaunch myagv_navigation navigation_active.launch"
 LAUNCH_MULTI = "roslaunch multi_goals_navigation multi_goals_navigation.launch"
 
-PID_NAV   = Path("/tmp/myagv_navigation.pid")
-PID_MULTI = Path("/tmp/myagv_multi_goals.pid")
+def ssh(cmd: str) -> int:
+    """원격에서 bash -lc 로 실행"""
+    full = ["ssh", f"{AGV_USER}@{AGV_HOST}", "bash", "-lc", cmd]
+    return subprocess.call(full)
 
-# ----------------------------
-# Terminal detection
-# ----------------------------
+def start_remote():
+    # 1) navigation: 원격에서 환경 로드 후 nohup 백그라운드 + PID 기록
+    cmd_nav = f"""
+      set -e
+      source {ROS_SETUP} >/dev/null 2>&1 || true
+      if [ -f {WS_SETUP} ]; then source {WS_SETUP}; fi
+      nohup bash -lc '{LAUNCH_NAV}' >/tmp/nav.log 2>&1 & echo $! > {PID_NAV}
+    """
+    print("[remote] start navigation...")
+    if ssh(cmd_nav) != 0:
+        print("[ERR] navigation start failed")
+        sys.exit(1)
 
-def detect_terminal():
-    if which("gnome-terminal"):
-        def build(term, title, inner):
-            return ["gnome-terminal", "--title", title, "--", "bash", "-lc", inner]
-        return "gnome-terminal", build
-    if which("konsole"):
-        def build(term, title, inner):
-            return ["konsole", "-p", f"tabtitle={title}", "-e", "bash", "-lc", inner]
-        return "konsole", build
-    if which("xfce4-terminal"):
-        def build(term, title, inner):
-            return ["xfce4-terminal", "--title", title, "--command", f"bash -lc \"{inner}\""]
-        return "xfce4-terminal", build
-    if which("lxterminal"):
-        def build(term, title, inner):
-            return ["lxterminal", "-t", title, "-e", "bash", "-lc", inner]
-        return "lxterminal", build
-    if which("xterm"):
-        def build(term, title, inner):
-            return ["xterm", "-T", title, "-e", "bash", "-lc", inner]
-        return "xterm", build
-    if which("x-terminal-emulator"):
-        def build(term, title, inner):
-            return ["x-terminal-emulator", "-T", title, "-e", "bash", "-lc", inner]
-        return "x-terminal-emulator", build
-    return None, None
+    # 2) 5초 대기 후 multi_goals
+    cmd_multi = f"""
+      set -e
+      sleep 5
+      source {ROS_SETUP} >/dev/null 2>&1 || true
+      if [ -f {WS_SETUP} ]; then source {WS_SETUP}; fi
+      nohup bash -lc '{LAUNCH_MULTI}' >/tmp/multi.log 2>&1 & echo $! > {PID_MULTI}
+    """
+    print("[remote] start multi_goals after 5s...")
+    if ssh(cmd_multi) != 0:
+        print("[ERR] multi_goals start failed")
+        sys.exit(1)
 
-# ----------------------------
-# Helpers
-# ----------------------------
+    print("[OK] started both on remote. logs: /tmp/nav.log, /tmp/multi.log (on myAGV)")
 
-def spawn_in_new_terminal(cmd: str, pid_path: Path, title: str):
-    inner = f"{cmd} & echo $! > {pid_path}; wait $!; exec bash"
-    term, builder = detect_terminal()
-    if term is None:
-        print(f"[WARN] No GUI terminal found for '{title}'. Running in background.")
-        proc = subprocess.Popen(["bash", "-lc", cmd], start_new_session=True)
-        try:
-            pid_path.write_text(str(proc.pid))
-        except Exception:
-            pass
-        print(f"[OK] started: '{cmd}' (pid={proc.pid}) pidfile={pid_path}")
-        return proc
-    argv = builder(term, title, inner)
-    try:
-        proc = subprocess.Popen(argv, start_new_session=True)
-        print(f"[OK] terminal '{term}' spawned for '{title}' (pid={proc.pid})")
-    except Exception as e:
-        print(f"[ERR] terminal spawn failed for '{title}': {e}")
-        print("[WARN] Falling back to background run.")
-        proc = subprocess.Popen(["bash", "-lc", cmd], start_new_session=True)
-        try:
-            pid_path.write_text(str(proc.pid))
-        except Exception:
-            pass
-        print(f"[OK] started: '{cmd}' (pid={proc.pid}) pidfile={pid_path}")
-        return proc
-
-    # wait for roslaunch PID to be recorded
-    t0 = time.time()
-    while time.time() - t0 < 5.0:
-        if pid_path.exists():
-            try:
-                int(pid_path.read_text().strip())
-                print(f"[OK] recorded roslaunch PID in {pid_path}")
-                break
-            except Exception:
-                pass
-        time.sleep(0.2)
-    return proc
-
-def read_pid(pid_path: Path):
-    try:
-        return int(pid_path.read_text().strip())
-    except Exception:
-        return None
-
-def kill_with_grace(pid: int, name: str, timeout: float = 5.0):
-    if pid is None:
-        print(f"[INFO] {name}: no pid.")
-        return
-    try:
-        # try SIGINT, then SIGTERM, then SIGKILL
-        for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGKILL):
-            try:
-                os.kill(pid, sig)
-            except ProcessLookupError:
-                print(f"[OK] {name}: already exited.")
-                return
-            if sig != signal.SIGKILL:
-                t0 = time.time()
-                while time.time() - t0 < timeout:
-                    try:
-                        os.kill(pid, 0)
-                    except ProcessLookupError:
-                        print(f"[OK] {name}: exited on {sig.name}.")
-                        return
-                    time.sleep(0.2)
-        print(f"[OK] {name}: killed with SIGKILL.")
-    except PermissionError:
-        print(f"[ERR] {name}: permission error while killing.")
-    except ProcessLookupError:
-        print(f"[OK] {name}: already exited.")
-
-# ----------------------------
-# Actions
-# ----------------------------
-
-def start_both():
-    # 1) Navigation first
-    spawn_in_new_terminal(LAUNCH_NAV, PID_NAV, "myAGV:navigation")
-
-    # 2) Wait 5s then multi-goals
-    print("[INFO] waiting 5s before starting multi_goals_navigation...")
-    time.sleep(5.0)
-    spawn_in_new_terminal(LAUNCH_MULTI, PID_MULTI, "myAGV:multi_goals")
-
-def stop_both():
-    # stop multi-goals first
-    kill_with_grace(read_pid(PID_MULTI), "multi_goals_navigation")
-    try:
-        PID_MULTI.unlink(missing_ok=True)
-    except Exception:
-        pass
-
-    # then navigation
-    kill_with_grace(read_pid(PID_NAV), "navigation")
-    try:
-        PID_NAV.unlink(missing_ok=True)
-    except Exception:
-        pass
-
-# ----------------------------
-# Main
-# ----------------------------
+def stop_remote():
+    # multi_goals 먼저 정지, 그 다음 navigation
+    cmd_stop = f"""
+      for f in {PID_MULTI} {PID_NAV}; do
+        if [ -f "$f" ]; then
+          pid=$(cat "$f" 2>/dev/null || true)
+          if [ -n "$pid" ]; then
+            # 순차 종료: INT -> TERM -> KILL
+            kill -INT "$pid" 2>/dev/null || true
+            sleep 1
+            kill -TERM "$pid" 2>/dev/null || true
+            sleep 1
+            kill -KILL "$pid" 2>/dev/null || true
+          fi
+          rm -f "$f"
+        fi
+      done
+      # roslaunch 트리 누수 대비(프로세스명 기준 추가 정리, 실패해도 무시)
+      pkill -f 'roslaunch myagv_navigation navigation_active.launch' 2>/dev/null || true
+      pkill -f 'roslaunch multi_goals_navigation multi_goals_navigation.launch' 2>/dev/null || true
+    """
+    print("[remote] stopping both...")
+    ssh(cmd_stop)
+    print("[OK] stopped both on remote")
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="myAGV navigation runner (+multi_goals after 5s). Default: start both."
-    )
-    grp = parser.add_mutually_exclusive_group()
-    grp.add_argument("--start", action="store_true", help="start navigation, then multi_goals after 5s (default)")
-    grp.add_argument("--stop",  action="store_true", help="stop both (navigation + multi_goals)")
-
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser(description="remote myAGV navigation + multi_goals starter")
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument("--start", action="store_true", help="start on remote (default)")
+    g.add_argument("--stop",  action="store_true", help="stop on remote")
+    args = ap.parse_args()
 
     if args.stop:
-        stop_both()
+        stop_remote()
     else:
-        start_both()
+        start_remote()
 
 if __name__ == "__main__":
     main()

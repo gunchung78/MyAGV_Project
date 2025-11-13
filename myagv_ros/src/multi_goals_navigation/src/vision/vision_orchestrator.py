@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 
 # AGV / PC 환경 (필요하면 하드코딩 유지)
-AGV_MASTER = "http://172.30.1.10:11311"
-PC_IP      = "172.30.1.1"
+AGV_MASTER = "http://10.229.15.61:11311"
+PC_IP      = "10.229.15.47"
 
 YOLO_CMD   = "rosrun multi_goals_navigation vision_sub_node.py"
 RESULT_CMD = "rosrun multi_goals_navigation vision_result.py"
