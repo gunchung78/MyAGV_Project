@@ -33,6 +33,6 @@ obstacle_layer:
 
 # 인플레이션(로봇 주변 안전 여유)
 inflation_layer:
-  inflation_radius: 0.30
+  inflation_radius: 0.10 # 0.30 11-15
   cost_scaling_factor: 3.0
 
