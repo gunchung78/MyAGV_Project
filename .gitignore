@@ -1,3 +1,23 @@
-myagv_ros/build/
-myagv_ros/devel/
+# catkin build artifacts (any workspace)
+build/
+devel/
+install/
+.catkin_tools/
 myagv_ros/third_party/
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs / runtime
+*.log
+*.pid
+
+# Editor / OS
+*.swp
+.vscode/
+.DS_Store
+
+# Backup files
+*_bak*
+*(사본)*
